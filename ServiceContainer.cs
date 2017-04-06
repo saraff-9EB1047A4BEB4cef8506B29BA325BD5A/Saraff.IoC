@@ -79,11 +79,29 @@ namespace Saraff.IoC {
         /// <summary>
         /// Binds the specified service.
         /// </summary>
+        /// <typeparam name="TService">The type of the service.</typeparam>
+        /// <typeparam name="T">Type of object.</typeparam>
+        public void Bind<TService, T>() {
+            this.Bind(typeof(TService),typeof(T));
+        }
+
+        /// <summary>
+        /// Binds the specified service.
+        /// </summary>
         /// <param name="service">The service.</param>
         /// <param name="obj">The object.</param>
         public void Bind(Type service,object obj) {
             this.Bind(service,obj.GetType());
             this._instances.Add(service,obj);
+        }
+
+        /// <summary>
+        /// Binds the specified service.
+        /// </summary>
+        /// <typeparam name="TService">The type of the service.</typeparam>
+        /// <param name="obj">The object.</param>
+        public void Bind<TService>(object obj) {
+            this.Bind(typeof(TService),obj);
         }
 
         /// <summary>
