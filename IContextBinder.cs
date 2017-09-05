@@ -28,47 +28,11 @@
  */
 using System;
 using System.Collections.Generic;
-using System.Web;
+using System.Linq;
+using System.Text;
 
 namespace Saraff.IoC {
 
-    /// <summary>
-    /// Выполняет привязку типа интерфейса к типу объекта.
-    /// </summary>
-    /// <seealso cref="System.Attribute" />
-    [AttributeUsage(AttributeTargets.Assembly,AllowMultiple = true,Inherited = false)]
-    public sealed class BindServiceAttribute:Attribute {
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="BindServiceAttribute"/> class.
-        /// </summary>
-        /// <param name="service">Тип интерфейса.</param>
-        /// <param name="obj">Тип объекта.</param>
-        public BindServiceAttribute(Type service,Type obj) {
-            this.Service = service;
-            this.ObjectType = obj;
-        }
-
-        /// <summary>
-        /// Возвращается тип интерфейса.
-        /// </summary>
-        /// <value>
-        /// Тип интерфейса.
-        /// </value>
-        public Type Service {
-            get;
-            private set;
-        }
-
-        /// <summary>
-        /// Возвращает тип объекта..
-        /// </summary>
-        /// <value>
-        /// Тип объекта.
-        /// </value>
-        public Type ObjectType {
-            get;
-            private set;
-        }
+    public interface IContextBinder<TService, TContext> {
     }
 }

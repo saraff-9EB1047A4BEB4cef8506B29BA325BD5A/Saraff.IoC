@@ -25,7 +25,6 @@
  * GNU Lesser General Public License for more details.
  * You should have received a copy of the GNU Lesser General Public License
  * along with Saraff.IoC. If not, see <http://www.gnu.org/licenses/>.
- * 
  */
 using System;
 using System.Collections.Generic;
@@ -128,7 +127,12 @@ namespace Saraff.IoC {
 
         private object _CreateInstanceCore(Type type) {
             if(this._stack.Contains(type)) {
-                throw new InvalidOperationException(string.Format("IoC. Обнаружена циклическая зависимость в \"{0}\".",type.FullName));
+                var _trace = string.Empty;
+                this._stack.Push(type);
+                foreach(var _item in this._stack) {
+                    _trace+=string.Format("  в {1}{0}",Environment.NewLine,_item.FullName);
+                }
+                throw new InvalidOperationException(string.Format("IoC. Обнаружена циклическая зависимость в \"{1}\".{0}Трасcировка:{0}{2}",Environment.NewLine,type.FullName,_trace));
             }
             this._stack.Push(type);
             try {
@@ -137,7 +141,11 @@ namespace Saraff.IoC {
                         if(_ctor.GetCustomAttributes(typeof(ServiceRequiredAttribute),false).Length > 0) {
                             var _args = new List<object>();
                             foreach(var _param in _ctor.GetParameters()) {
-                                _args.Add(_param.ParameterType.IsInterface ? this.GetService(_param.ParameterType) : this._CreateInstanceCore(_param.ParameterType));
+                                if(_param.ParameterType.IsGenericType&&_param.ParameterType.GetGenericTypeDefinition()==typeof(IContextBinder<,>)) {
+                                    _args.Add(null);
+                                } else {
+                                    _args.Add(_param.ParameterType.IsInterface ? (this.GetService(typeof(IContextBinder<,>).MakeGenericType(_param.ParameterType,type))??this.GetService(_param.ParameterType)) : this._CreateInstanceCore(_param.ParameterType));
+                                }
                             }
                             return Activator.CreateInstance(type,_args.ToArray());
                         }
@@ -148,9 +156,11 @@ namespace Saraff.IoC {
                     throw new InvalidOperationException(string.Format("IoC. Не удалось найти подходящий конструктор для создания экземпляра \"{0}\".",type.FullName));
                 })();
                 foreach(var _prop in type.GetProperties()) {
-                    if(_prop.PropertyType.IsInterface) {
-                        foreach(var _attr in _prop.GetCustomAttributes(typeof(ServiceRequiredAttribute),false)) {
-                            _prop.SetValue(_inst,this.GetService(_prop.PropertyType),null);
+                    foreach(var _attr in _prop.GetCustomAttributes(typeof(ServiceRequiredAttribute),false)) {
+                        if(_prop.PropertyType.IsGenericType&&_prop.PropertyType.GetGenericTypeDefinition()==typeof(IContextBinder<,>)) {
+                            _prop.SetValue(_inst,null,null);
+                        } else {
+                            _prop.SetValue(_inst,_prop.PropertyType.IsInterface ? (this.GetService(typeof(IContextBinder<,>).MakeGenericType(_prop.PropertyType,type))??this.GetService(_prop.PropertyType)) : this._CreateInstanceCore(_prop.PropertyType),null);
                         }
                     }
                 }
