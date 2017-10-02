@@ -37,7 +37,7 @@ namespace Saraff.IoC {
     /// </summary>
     /// <seealso cref="System.Attribute" />
     [AttributeUsage(AttributeTargets.Assembly,AllowMultiple = true,Inherited = false)]
-    public sealed class BindServiceAttribute:Attribute {
+    public sealed class BindServiceAttribute:BindServiceBaseAttribute {
 
         /// <summary>
         /// Initializes a new instance of the <see cref="BindServiceAttribute"/> class.
@@ -48,6 +48,9 @@ namespace Saraff.IoC {
             this.Service = service;
             this.ObjectType = obj;
         }
+    }
+
+    public abstract class BindServiceBaseAttribute:Attribute {
 
         /// <summary>
         /// Возвращается тип интерфейса.
@@ -57,7 +60,7 @@ namespace Saraff.IoC {
         /// </value>
         public Type Service {
             get;
-            private set;
+            protected set;
         }
 
         /// <summary>
@@ -68,7 +71,7 @@ namespace Saraff.IoC {
         /// </value>
         public Type ObjectType {
             get;
-            private set;
+            protected set;
         }
     }
 }

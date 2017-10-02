@@ -43,13 +43,15 @@ namespace Saraff.IoC {
         private Dictionary<Type,Type> _binding = new Dictionary<Type,Type>();
         private Dictionary<Type,object> _instances = new Dictionary<Type,object>();
         private Stack<Type> _stack = new Stack<Type>();
+        private Type _serviceRequiredAttribute = null;
+        private Type _bindServiceAttribute = null;
 
         /// <summary>
         /// Выполняет загрузку привязок из указанной сборки.
         /// </summary>
         /// <param name="assembly">The assembly.</param>
         public void Load(Assembly assembly) {
-            foreach(BindServiceAttribute _attr in assembly.GetCustomAttributes(typeof(BindServiceAttribute),false)) {
+            foreach(BindServiceBaseAttribute _attr in assembly.GetCustomAttributes(this.BindServiceAttribute,false)) {
                 this.Bind(_attr.Service,_attr.ObjectType);
             }
         }
@@ -108,8 +110,8 @@ namespace Saraff.IoC {
         /// </summary>
         /// <typeparam name="T">Тип.</typeparam>
         /// <returns>Экземпляр указанного типа.</returns>
-        public T CreateInstance<T>() where T : class {
-            return this.CreateInstance(typeof(T)) as T;
+        public T CreateInstance<T>(params CtorCallback[] args) where T : class {
+            return this.CreateInstance(typeof(T),args) as T;
         }
 
         /// <summary>
@@ -117,15 +119,19 @@ namespace Saraff.IoC {
         /// </summary>
         /// <param name="type">Тип.</param>
         /// <returns>Экземпляр указанного типа.</returns>
-        public object CreateInstance(Type type) {
+        public object CreateInstance(Type type,params CtorCallback[] args) {
             try {
-                return this._CreateInstanceCore(type);
+                var _args = new Dictionary<string,object>();
+                foreach(var _arg in args) {
+                    _arg((name,val) => _args.Add(name,val));
+                }
+                return this._CreateInstanceCore(type,_args);
             } finally {
                 this._stack.Clear();
             }
         }
 
-        private object _CreateInstanceCore(Type type) {
+        private object _CreateInstanceCore(Type type,IDictionary<string,object> ctorArgs) {
             if(this._stack.Contains(type)) {
                 var _trace = string.Empty;
                 this._stack.Push(type);
@@ -138,13 +144,13 @@ namespace Saraff.IoC {
             try {
                 var _inst = new _Func(()=> {
                     foreach(var _ctor in type.GetConstructors()) {
-                        if(_ctor.GetCustomAttributes(typeof(ServiceRequiredAttribute),false).Length > 0) {
+                        if(_ctor.GetCustomAttributes(this.ServiceRequiredAttribute,false).Length > 0) {
                             var _args = new List<object>();
                             foreach(var _param in _ctor.GetParameters()) {
                                 if(_param.ParameterType.IsGenericType&&_param.ParameterType.GetGenericTypeDefinition()==typeof(IContextBinder<,>)) {
                                     _args.Add(null);
                                 } else {
-                                    _args.Add(_param.ParameterType.IsInterface ? (this.GetService(typeof(IContextBinder<,>).MakeGenericType(_param.ParameterType,type))??this.GetService(_param.ParameterType)) : this._CreateInstanceCore(_param.ParameterType));
+                                    _args.Add(ctorArgs.ContainsKey(_param.Name) ? ctorArgs[_param.Name] : (_param.ParameterType.IsInterface ? (this.GetService(typeof(IContextBinder<,>).MakeGenericType(_param.ParameterType,type))??this.GetService(_param.ParameterType)) : this._CreateInstanceCore(_param.ParameterType,new Dictionary<string,object>())));
                                 }
                             }
                             return Activator.CreateInstance(type,_args.ToArray());
@@ -156,11 +162,11 @@ namespace Saraff.IoC {
                     throw new InvalidOperationException(string.Format("IoC. Не удалось найти подходящий конструктор для создания экземпляра \"{0}\".",type.FullName));
                 })();
                 foreach(var _prop in type.GetProperties()) {
-                    foreach(var _attr in _prop.GetCustomAttributes(typeof(ServiceRequiredAttribute),false)) {
+                    foreach(var _attr in _prop.GetCustomAttributes(this.ServiceRequiredAttribute,false)) {
                         if(_prop.PropertyType.IsGenericType&&_prop.PropertyType.GetGenericTypeDefinition()==typeof(IContextBinder<,>)) {
                             _prop.SetValue(_inst,null,null);
                         } else {
-                            _prop.SetValue(_inst,_prop.PropertyType.IsInterface ? (this.GetService(typeof(IContextBinder<,>).MakeGenericType(_prop.PropertyType,type))??this.GetService(_prop.PropertyType)) : this._CreateInstanceCore(_prop.PropertyType),null);
+                            _prop.SetValue(_inst,_prop.PropertyType.IsInterface ? (this.GetService(typeof(IContextBinder<,>).MakeGenericType(_prop.PropertyType,type))??this.GetService(_prop.PropertyType)) : this._CreateInstanceCore(_prop.PropertyType,new Dictionary<string,object>()),null);
                         }
                     }
                 }
@@ -187,7 +193,7 @@ namespace Saraff.IoC {
         protected override object GetService(Type service) {
             if(this._binding.ContainsKey(service)) {
                 if(!this._instances.ContainsKey(service)) {
-                    this._instances.Add(service,this._CreateInstanceCore(this._binding[service]));
+                    this._instances.Add(service,this._CreateInstanceCore(this._binding[service],new Dictionary<string,object>()));
                 }
                 return this._instances[service];
             }
@@ -212,6 +218,36 @@ namespace Saraff.IoC {
             }
         }
 
+        private Type ServiceRequiredAttribute {
+            get {
+                if(this._serviceRequiredAttribute==null) {
+                    if(this._binding.ContainsKey(typeof(IContextBinder<IAttributeTypeRedirector,ServiceRequiredAttribute>))) {
+                        using(var _component = Activator.CreateInstance(this._binding[typeof(IContextBinder<IAttributeTypeRedirector,ServiceRequiredAttribute>)]) as IComponent) {
+                            this._serviceRequiredAttribute=(_component as IAttributeTypeRedirector)?.Type;
+                        }
+                    }
+                }
+                return this._serviceRequiredAttribute??typeof(ServiceRequiredAttribute);
+            }
+        }
+
+        private Type BindServiceAttribute {
+            get {
+                if(this._bindServiceAttribute==null) {
+                    if(this._binding.ContainsKey(typeof(IContextBinder<IAttributeTypeRedirector,BindServiceAttribute>))) {
+                        using(var _component = Activator.CreateInstance(this._binding[typeof(IContextBinder<IAttributeTypeRedirector,BindServiceAttribute>)]) as IComponent) {
+                            this._bindServiceAttribute=(_component as IAttributeTypeRedirector)?.Type;
+                        }
+                    }
+                }
+                return this._bindServiceAttribute??typeof(BindServiceAttribute);
+            }
+        }
+
         private delegate object _Func();
+
+        public delegate void CtorCallback(CtorCallbackCore callback);
+
+        public delegate void CtorCallbackCore(string name,object val);
     }
 }
