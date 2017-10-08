@@ -43,16 +43,15 @@ namespace Saraff.IoC {
         private Dictionary<Type,Type> _binding = new Dictionary<Type,Type>();
         private Dictionary<Type,object> _instances = new Dictionary<Type,object>();
         private Stack<Type> _stack = new Stack<Type>();
-        private Type _serviceRequiredAttribute = null;
-        private Type _bindServiceAttribute = null;
+        private IConfiguration _config = null;
 
         /// <summary>
         /// Выполняет загрузку привязок из указанной сборки.
         /// </summary>
         /// <param name="assembly">The assembly.</param>
         public void Load(Assembly assembly) {
-            foreach(BindServiceBaseAttribute _attr in assembly.GetCustomAttributes(this.BindServiceAttribute,false)) {
-                this.Bind(_attr.Service,_attr.ObjectType);
+            foreach(Attribute _attr in assembly.GetCustomAttributes(this.BindServiceAttribute,false)) {
+                this.BindServiceCallback(_attr,this.Bind);
             }
         }
 
@@ -147,10 +146,10 @@ namespace Saraff.IoC {
                         if(_ctor.GetCustomAttributes(this.ServiceRequiredAttribute,false).Length > 0) {
                             var _args = new List<object>();
                             foreach(var _param in _ctor.GetParameters()) {
-                                if(_param.ParameterType.IsGenericType&&_param.ParameterType.GetGenericTypeDefinition()==typeof(IContextBinder<,>)) {
+                                if(_param.ParameterType.IsGenericType&&_param.ParameterType.GetGenericTypeDefinition()==this.ContextBinder) {
                                     _args.Add(null);
                                 } else {
-                                    _args.Add(ctorArgs.ContainsKey(_param.Name) ? ctorArgs[_param.Name] : (_param.ParameterType.IsInterface ? (this.GetService(typeof(IContextBinder<,>).MakeGenericType(_param.ParameterType,type))??this.GetService(_param.ParameterType)) : this._CreateInstanceCore(_param.ParameterType,new Dictionary<string,object>())));
+                                    _args.Add(ctorArgs.ContainsKey(_param.Name) ? ctorArgs[_param.Name] : (_param.ParameterType.IsInterface ? (this.GetService(this.ContextBinder.MakeGenericType(_param.ParameterType,type))??this.GetService(_param.ParameterType)) : this._CreateInstanceCore(_param.ParameterType,new Dictionary<string,object>())));
                                 }
                             }
                             return Activator.CreateInstance(type,_args.ToArray());
@@ -163,10 +162,10 @@ namespace Saraff.IoC {
                 })();
                 foreach(var _prop in type.GetProperties()) {
                     foreach(var _attr in _prop.GetCustomAttributes(this.ServiceRequiredAttribute,false)) {
-                        if(_prop.PropertyType.IsGenericType&&_prop.PropertyType.GetGenericTypeDefinition()==typeof(IContextBinder<,>)) {
+                        if(_prop.PropertyType.IsGenericType&&_prop.PropertyType.GetGenericTypeDefinition()==this.ContextBinder) {
                             _prop.SetValue(_inst,null,null);
                         } else {
-                            _prop.SetValue(_inst,_prop.PropertyType.IsInterface ? (this.GetService(typeof(IContextBinder<,>).MakeGenericType(_prop.PropertyType,type))??this.GetService(_prop.PropertyType)) : this._CreateInstanceCore(_prop.PropertyType,new Dictionary<string,object>()),null);
+                            _prop.SetValue(_inst,_prop.PropertyType.IsInterface ? (this.GetService(this.ContextBinder.MakeGenericType(_prop.PropertyType,type))??this.GetService(_prop.PropertyType)) : this._CreateInstanceCore(_prop.PropertyType,new Dictionary<string,object>()),null);
                         }
                     }
                 }
@@ -220,27 +219,43 @@ namespace Saraff.IoC {
 
         private Type ServiceRequiredAttribute {
             get {
-                if(this._serviceRequiredAttribute==null) {
-                    if(this._binding.ContainsKey(typeof(IContextBinder<IAttributeTypeRedirector,ServiceRequiredAttribute>))) {
-                        using(var _component = Activator.CreateInstance(this._binding[typeof(IContextBinder<IAttributeTypeRedirector,ServiceRequiredAttribute>)]) as IComponent) {
-                            this._serviceRequiredAttribute=(_component as IAttributeTypeRedirector)?.Type;
-                        }
-                    }
-                }
-                return this._serviceRequiredAttribute??typeof(ServiceRequiredAttribute);
+                return this.ConfigurationService?.ServiceRequiredAttributeType??typeof(ServiceRequiredAttribute);
             }
         }
 
         private Type BindServiceAttribute {
             get {
-                if(this._bindServiceAttribute==null) {
-                    if(this._binding.ContainsKey(typeof(IContextBinder<IAttributeTypeRedirector,BindServiceAttribute>))) {
-                        using(var _component = Activator.CreateInstance(this._binding[typeof(IContextBinder<IAttributeTypeRedirector,BindServiceAttribute>)]) as IComponent) {
-                            this._bindServiceAttribute=(_component as IAttributeTypeRedirector)?.Type;
-                        }
+                return this.ConfigurationService?.BindServiceAttributeType??typeof(BindServiceAttribute);
+            }
+        }
+
+        public BindServiceCallback BindServiceCallback {
+            get {
+                return this.ConfigurationService?.BindServiceCallback??new BindServiceCallback((x,callback) => {
+                    var _attr = x as BindServiceAttribute;
+                    if(_attr!=null) {
+                        callback(_attr.Service,_attr.ObjectType);
+                    }
+                });
+            }
+        }
+
+        private Type ContextBinder {
+            get {
+                return this.ConfigurationService?.ContextBinderType?.GetGenericTypeDefinition()??typeof(IContextBinder<,>);
+            }
+        }
+
+        private IConfiguration ConfigurationService {
+            get {
+                if(this._config==null&&this._binding.ContainsKey(typeof(IConfiguration))) {
+                    var _component = Activator.CreateInstance(this._binding[typeof(IConfiguration)]) as IComponent;
+                    if(_component!=null) {
+                        this.Add(_component);
+                        this._config=_component as IConfiguration;
                     }
                 }
-                return this._bindServiceAttribute??typeof(BindServiceAttribute);
+                return this._config;
             }
         }
 
