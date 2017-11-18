@@ -6,4 +6,4 @@ PM> Install-Package Saraff.IoC
 ```
 Also, you can see: 
 * [NuGet package of the Saraff.IoC](https://www.nuget.org/packages/Saraff.IoC/)
-* [Wiki of the Saraff.Ioc](https://saraff-9eb1047a4beb4cef8506b29ba325bd5a.github.io/saraffioc/)
+* [Wiki of the Saraff.IoC](https://saraff-9eb1047a4beb4cef8506b29ba325bd5a.github.io/saraffioc/)
