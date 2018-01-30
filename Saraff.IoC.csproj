@@ -50,6 +50,7 @@
     <Compile Include="IConfiguration.cs" />
     <Compile Include="IContextBinder.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ProxyRequiredAttribute.cs" />
     <Compile Include="ServiceContainer.cs" />
     <Compile Include="ServiceRequiredAttribute.cs" />
   </ItemGroup>

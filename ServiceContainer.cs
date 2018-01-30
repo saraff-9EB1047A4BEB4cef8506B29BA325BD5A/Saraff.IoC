@@ -30,7 +30,13 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Reflection;
-using System.Web;
+#if NETSTANDARD2_0
+using System.Linq;
+#else
+using System.Runtime.Remoting.Messaging;
+using System.Runtime.Remoting.Proxies;
+using System.Security.Permissions;
+#endif
 
 namespace Saraff.IoC {
 
@@ -92,7 +98,7 @@ namespace Saraff.IoC {
         /// <param name="obj">The object.</param>
         public void Bind(Type service,object obj) {
             this.Bind(service,obj.GetType());
-            this._instances.Add(service,obj);
+            this._AddInstance(service,obj);
         }
 
         /// <summary>
@@ -143,7 +149,7 @@ namespace Saraff.IoC {
             try {
                 var _inst = new _Func(()=> {
                     foreach(var _ctor in type.GetConstructors()) {
-                        if(_ctor.GetCustomAttributes(this.ServiceRequiredAttribute,false).Length > 0) {
+                        if(_ctor.IsDefined(this.ServiceRequiredAttribute,false)) {
                             var _args = new List<object>();
                             foreach(var _param in _ctor.GetParameters()) {
                                 if(_param.ParameterType.IsGenericType&&_param.ParameterType.GetGenericTypeDefinition()==this.ContextBinder) {
@@ -161,7 +167,7 @@ namespace Saraff.IoC {
                     throw new InvalidOperationException(string.Format("IoC. Не удалось найти подходящий конструктор для создания экземпляра \"{0}\".",type.FullName));
                 })();
                 foreach(var _prop in type.GetProperties()) {
-                    foreach(var _attr in _prop.GetCustomAttributes(this.ServiceRequiredAttribute,false)) {
+                    if(_prop.IsDefined(this.ServiceRequiredAttribute,false)) {
                         if(_prop.PropertyType.IsGenericType&&_prop.PropertyType.GetGenericTypeDefinition()==this.ContextBinder) {
                             _prop.SetValue(_inst,null,null);
                         } else {
@@ -179,6 +185,18 @@ namespace Saraff.IoC {
             }
         }
 
+        private void _AddInstance(Type service, object instance) {
+            this._instances.Add(
+                service,
+                instance.GetType().IsDefined(typeof(ProxyRequiredAttribute), false) ?
+#if NETSTANDARD2_0
+                    new _InstanceProxy { Container = this, Instance = instance }.GetTransparentProxy(service.GetGenericTypeDefinition() == this.ContextBinder ? service.GetGenericArguments()[0] : service)
+#else
+                    new _InstanceProxy(this, instance).GetTransparentProxy()
+#endif
+                    : instance);
+        }
+
         /// <summary>
         /// Returns an object that represents a service provided by the System.ComponentModel.Component
         /// or by its System.ComponentModel.Container.
@@ -192,7 +210,7 @@ namespace Saraff.IoC {
         protected override object GetService(Type service) {
             if(this._binding.ContainsKey(service)) {
                 if(!this._instances.ContainsKey(service)) {
-                    this._instances.Add(service,this._CreateInstanceCore(this._binding[service],new Dictionary<string,object>()));
+                    this._AddInstance(service,this._CreateInstanceCore(this._binding[service],new Dictionary<string,object>()));
                 }
                 return this._instances[service];
             }
@@ -229,7 +247,7 @@ namespace Saraff.IoC {
             }
         }
 
-        public BindServiceCallback BindServiceCallback {
+        private BindServiceCallback BindServiceCallback {
             get {
                 return this.ConfigurationService?.BindServiceCallback??new BindServiceCallback((x,callback) => {
                     var _attr = x as BindServiceAttribute;
@@ -264,5 +282,69 @@ namespace Saraff.IoC {
         public delegate void CtorCallback(CtorCallbackCore callback);
 
         public delegate void CtorCallbackCore(string name,object val);
+
+#if NETSTANDARD2_0
+
+        public class _InstanceProxy : DispatchProxy {
+
+            public _InstanceProxy() {
+            }
+
+            protected override object Invoke(MethodInfo targetMethod, object[] args) {
+                var _args = new List<object>();
+                foreach(var _param in this.Instance.GetType().GetMethod(targetMethod.Name, targetMethod.GetParameters().Select(x => x.ParameterType).ToArray()).GetParameters()) {
+                    _args.Add(!_param.IsOut && args[_param.Position] == null && _param.IsDefined(typeof(ServiceRequiredAttribute), false) ? (_param.ParameterType.IsInterface ? this.Container.GetService(_param.ParameterType) : this.Container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>())) : args[_param.Position]);
+                }
+                var _argsArray = _args.ToArray();
+                return targetMethod.Invoke(this.Instance, _argsArray);
+            }
+
+            internal object GetTransparentProxy(Type type) {
+                var _proxy = (typeof(DispatchProxy).GetMethod(nameof(DispatchProxy.Create), BindingFlags.Static | BindingFlags.Public).MakeGenericMethod(type, this.GetType()).Invoke(null, null)) as _InstanceProxy;
+                if(_proxy != null) {
+                    _proxy.Instance = this.Instance;
+                    _proxy.Container = this.Container;
+                }
+                return _proxy;
+            }
+
+            internal object Instance {
+                get; set;
+            }
+
+            internal ServiceContainer Container {
+                get; set;
+            }
+        }
+#else
+
+        private sealed class _InstanceProxy : RealProxy {
+            private object _instance;
+            private ServiceContainer _container;
+
+            [PermissionSet(SecurityAction.LinkDemand)]
+            public _InstanceProxy(ServiceContainer container, object instance) : base(instance?.GetType()) {
+                this._container = container;
+                this._instance = instance;
+            }
+
+            [SecurityPermissionAttribute(SecurityAction.LinkDemand, Flags = SecurityPermissionFlag.Infrastructure)]
+            public override IMessage Invoke(IMessage msg) {
+                var _msg = msg as IMethodCallMessage;
+                try {
+                    var _args = new List<object>();
+                    foreach(var _param in this._instance.GetType().GetMethod(_msg.MethodName, _msg.MethodSignature as Type[]).GetParameters()) {
+                        _args.Add(!_param.IsOut && _msg.GetArg(_param.Position) == null && _param.IsDefined(typeof(ServiceRequiredAttribute), false) ? (_param.ParameterType.IsInterface ? this._container.GetService(_param.ParameterType) : this._container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>())) : _msg.GetArg(_param.Position));
+                    }
+                    var _argsArray = _args.ToArray();
+                    return new ReturnMessage(_msg.MethodBase.Invoke(this._instance, _argsArray), _argsArray, 0, _msg.LogicalCallContext, _msg);
+                } catch(Exception ex) {
+                    return new ReturnMessage(ex, _msg);
+                }
+            }
+        }
+
+#endif
+
     }
 }

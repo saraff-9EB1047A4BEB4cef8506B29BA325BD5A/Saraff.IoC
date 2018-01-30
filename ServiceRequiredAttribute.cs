@@ -36,7 +36,7 @@ namespace Saraff.IoC {
     /// Указывает на необходимость внедрения зависимости.
     /// </summary>
     /// <seealso cref="System.Attribute" />
-    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Constructor,AllowMultiple = false,Inherited = false)]
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Constructor | AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
     public sealed class ServiceRequiredAttribute:Attribute {
     }
 }
