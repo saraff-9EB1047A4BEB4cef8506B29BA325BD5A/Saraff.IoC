@@ -21,6 +21,10 @@ namespace Saraff.IoC {
         Type ContextBinderType {
             get;
         }
+
+        Type ProxyRequiredAttributeType {
+            get;
+        }
     }
 
     public delegate void BindServiceCallback(Attribute attribute,BindServiceCallbackCore callback);

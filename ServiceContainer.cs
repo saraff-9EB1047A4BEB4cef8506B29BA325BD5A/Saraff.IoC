@@ -188,7 +188,7 @@ namespace Saraff.IoC {
         private void _AddInstance(Type service, object instance) {
             this._instances.Add(
                 service,
-                instance.GetType().IsDefined(typeof(ProxyRequiredAttribute), false) ?
+                instance.GetType().IsDefined(this.ProxyRequiredAttribute, false) ?
 #if NETSTANDARD2_0
                     new _InstanceProxy { Container = this, Instance = instance }.GetTransparentProxy(service.GetGenericTypeDefinition() == this.ContextBinder ? service.GetGenericArguments()[0] : service)
 #else
@@ -237,22 +237,28 @@ namespace Saraff.IoC {
 
         private Type ServiceRequiredAttribute {
             get {
-                return this.ConfigurationService?.ServiceRequiredAttributeType??typeof(ServiceRequiredAttribute);
+                return this.ConfigurationService?.ServiceRequiredAttributeType ?? typeof(ServiceRequiredAttribute);
             }
         }
 
         private Type BindServiceAttribute {
             get {
-                return this.ConfigurationService?.BindServiceAttributeType??typeof(BindServiceAttribute);
+                return this.ConfigurationService?.BindServiceAttributeType ?? typeof(BindServiceAttribute);
+            }
+        }
+
+        private Type ProxyRequiredAttribute {
+            get {
+                return this.ConfigurationService?.ProxyRequiredAttributeType ?? typeof(ProxyRequiredAttribute);
             }
         }
 
         private BindServiceCallback BindServiceCallback {
             get {
-                return this.ConfigurationService?.BindServiceCallback??new BindServiceCallback((x,callback) => {
+                return this.ConfigurationService?.BindServiceCallback ?? new BindServiceCallback((x, callback) => {
                     var _attr = x as BindServiceAttribute;
-                    if(_attr!=null) {
-                        callback(_attr.Service,_attr.ObjectType);
+                    if(_attr != null) {
+                        callback(_attr.Service, _attr.ObjectType);
                     }
                 });
             }
@@ -260,7 +266,7 @@ namespace Saraff.IoC {
 
         private Type ContextBinder {
             get {
-                return this.ConfigurationService?.ContextBinderType?.GetGenericTypeDefinition()??typeof(IContextBinder<,>);
+                return this.ConfigurationService?.ContextBinderType?.GetGenericTypeDefinition() ?? typeof(IContextBinder<,>);
             }
         }
 
