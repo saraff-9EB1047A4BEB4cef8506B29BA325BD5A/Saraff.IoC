@@ -340,7 +340,7 @@ namespace Saraff.IoC {
                 try {
                     var _args = new List<object>();
                     foreach(var _param in this._instance.GetType().GetMethod(_msg.MethodName, _msg.MethodSignature as Type[]).GetParameters()) {
-                        _args.Add(!_param.IsOut && _msg.GetArg(_param.Position) == null && _param.IsDefined(typeof(ServiceRequiredAttribute), false) ? (_param.ParameterType.IsInterface ? this._container.GetService(_param.ParameterType) : this._container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>())) : _msg.GetArg(_param.Position));
+                        _args.Add(!_param.IsOut && _msg.GetArg(_param.Position) == null && _param.IsDefined(this._container.ServiceRequiredAttribute, false) ? (_param.ParameterType.IsInterface ? this._container.GetService(_param.ParameterType) : this._container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>())) : _msg.GetArg(_param.Position));
                     }
                     var _argsArray = _args.ToArray();
                     return new ReturnMessage(_msg.MethodBase.Invoke(this._instance, _argsArray), _argsArray, 0, _msg.LogicalCallContext, _msg);
