@@ -28,11 +28,15 @@
  */
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 
 namespace Saraff.IoC {
 
-    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-    public sealed class ProxyRequiredAttribute : Attribute {
+    public interface IListener {
+
+        object OnInvoking(MethodBase method, object instance, object[] parameters);
+
+        object OnInvoked(MethodBase method, object instance, object result);
     }
 }
