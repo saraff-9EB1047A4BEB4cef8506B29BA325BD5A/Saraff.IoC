@@ -38,5 +38,7 @@ namespace Saraff.IoC {
         object OnInvoking(MethodBase method, object instance, object[] parameters);
 
         object OnInvoked(MethodBase method, object instance, object result);
+
+        Exception OnCatch(MethodBase method, object instance, Exception ex);
     }
 }

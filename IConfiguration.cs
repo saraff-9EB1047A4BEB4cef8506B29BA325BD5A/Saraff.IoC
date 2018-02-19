@@ -66,6 +66,10 @@ namespace Saraff.IoC {
         InvokedCallback InvokedCallback {
             get;
         }
+
+        CatchCallback CatchCallback {
+            get;
+        }
     }
 
     public delegate void BindServiceCallback(Attribute attribute,BindServiceCallbackCore callback);
@@ -75,4 +79,6 @@ namespace Saraff.IoC {
     public delegate object InvokingCallback(object listener, MethodBase method, object instance, object[] parameters);
 
     public delegate object InvokedCallback(object listener, MethodBase method, object instance, object result);
+
+    public delegate Exception CatchCallback(object listener, MethodBase method, object instance, Exception ex);
 }

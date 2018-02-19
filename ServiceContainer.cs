@@ -288,6 +288,12 @@ namespace Saraff.IoC {
             }
         }
 
+        private CatchCallback CatchCallback {
+            get {
+                return this.ConfigurationService?.CatchCallback ?? new CatchCallback((listener, method, instance, ex) => (listener as IListener)?.OnCatch(method, instance, ex));
+            }
+        }
+
         private IConfiguration ConfigurationService {
             get {
                 if(this._config==null&&this._binding.ContainsKey(typeof(IConfiguration))) {
@@ -315,16 +321,23 @@ namespace Saraff.IoC {
             }
 
             protected override object Invoke(MethodInfo targetMethod, object[] args) {
-                var _args = new List<object>();
-                foreach(var _param in this.Instance.GetType().GetMethod(targetMethod.Name, targetMethod.GetParameters().Select(x => x.ParameterType).ToArray()).GetParameters()) {
-                    _args.Add(!_param.IsOut && args[_param.Position] == null && _param.IsDefined(typeof(ServiceRequiredAttribute), false) ? (_param.ParameterType.IsInterface ? (this.Container.GetService(this.Container.ContextBinder.MakeGenericType(_param.ParameterType, this.Instance.GetType())) ?? this.Container.GetService(_param.ParameterType)) : this.Container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>())) : args[_param.Position]);
-                }
-                var _argsArray = _args.ToArray();
-
                 var _listener = this.Container.GetService(this.Container.ContextBinder.MakeGenericType(this.Container.Listener, this.Instance.GetType())) ?? this.Container.GetService(this.Container.Listener);
-                var _result = this.Container.InvokingCallback(_listener, targetMethod, this.Instance, _argsArray) ?? targetMethod.Invoke(this.Instance, _argsArray);
+                try {
+                    var _args = new List<object>();
+                    foreach(var _param in this.Instance.GetType().GetMethod(targetMethod.Name, targetMethod.GetParameters().Select(x => x.ParameterType).ToArray()).GetParameters()) {
+                        _args.Add(!_param.IsOut && args[_param.Position] == null && _param.IsDefined(typeof(ServiceRequiredAttribute), false) ? (_param.ParameterType.IsInterface ? (this.Container.GetService(this.Container.ContextBinder.MakeGenericType(_param.ParameterType, this.Instance.GetType())) ?? this.Container.GetService(_param.ParameterType)) : this.Container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>())) : args[_param.Position]);
+                    }
+                    var _argsArray = _args.ToArray();
 
-                return this.Container.InvokedCallback(_listener, targetMethod, this.Instance, _result) ?? _result;
+                    var _result = this.Container.InvokingCallback(_listener, targetMethod, this.Instance, _argsArray) ?? targetMethod.Invoke(this.Instance, _argsArray);
+
+                    return this.Container.InvokedCallback(_listener, targetMethod, this.Instance, _result) ?? _result;
+                } catch(Exception ex) {
+                    for(var _ex = this.Container.CatchCallback(_listener, targetMethod, this.Instance, ex); _ex != null;) {
+                        throw new TargetInvocationException(_ex);
+                    }
+                    throw;
+                }
             }
 
             internal object GetTransparentProxy(Type type) {
@@ -359,6 +372,7 @@ namespace Saraff.IoC {
             [SecurityPermissionAttribute(SecurityAction.LinkDemand, Flags = SecurityPermissionFlag.Infrastructure)]
             public override IMessage Invoke(IMessage msg) {
                 var _msg = msg as IMethodCallMessage;
+                var _listener = this._container.GetService(this._container.ContextBinder.MakeGenericType(this._container.Listener, this._instance.GetType())) ?? this._container.GetService(this._container.Listener);
                 try {
                     var _args = new List<object>();
                     foreach(var _param in this._instance.GetType().GetMethod(_msg.MethodName, _msg.MethodSignature as Type[]).GetParameters()) {
@@ -366,12 +380,11 @@ namespace Saraff.IoC {
                     }
                     var _argsArray = _args.ToArray();
 
-                    var _listener = this._container.GetService(this._container.ContextBinder.MakeGenericType(this._container.Listener, this._instance.GetType())) ?? this._container.GetService(this._container.Listener);
                     var _result = this._container.InvokingCallback(_listener, _msg.MethodBase, this._instance, _argsArray) ?? _msg.MethodBase.Invoke(this._instance, _argsArray);
 
                     return new ReturnMessage(this._container.InvokedCallback(_listener, _msg.MethodBase, this._instance, _result) ?? _result, _argsArray, 0, _msg.LogicalCallContext, _msg);
                 } catch(Exception ex) {
-                    return new ReturnMessage(ex, _msg);
+                    return new ReturnMessage(this._container.CatchCallback(_listener, _msg.MethodBase, this._instance, ex) ?? ex, _msg);
                 }
             }
         }
