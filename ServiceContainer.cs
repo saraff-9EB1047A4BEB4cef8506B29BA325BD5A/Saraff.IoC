@@ -334,7 +334,7 @@ namespace Saraff.IoC {
                     return this.Container.InvokedCallback(_listener, targetMethod, this.Instance, _result) ?? _result;
                 } catch(Exception ex) {
                     for(var _ex = this.Container.CatchCallback(_listener, targetMethod, this.Instance, ex); _ex != null;) {
-                        throw new TargetInvocationException(_ex);
+                        throw _ex;
                     }
                     throw;
                 }
