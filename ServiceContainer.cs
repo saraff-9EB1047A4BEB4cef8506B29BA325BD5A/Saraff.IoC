@@ -324,7 +324,20 @@ namespace Saraff.IoC {
                 var _listener = this.Container.GetService(this.Container.ContextBinder.MakeGenericType(this.Container.Listener, this.Instance.GetType())) ?? this.Container.GetService(this.Container.Listener);
                 try {
                     var _args = new List<object>();
-                    foreach(var _param in this.Instance.GetType().GetMethod(targetMethod.Name, targetMethod.GetParameters().Select(x => x.ParameterType).ToArray()).GetParameters()) {
+
+                    IEnumerable<ParameterInfo> _params = null;
+                    if(targetMethod.IsGenericMethod) {
+                        _params = 
+                            this.Instance.GetType().GetMethods()
+                            .Where(x => x.IsGenericMethod && x.Name == targetMethod.Name)
+                            .Where(x => x.GetGenericArguments().Length == targetMethod.GetGenericArguments().Length)
+                            .Single(x => x.MakeGenericMethod(targetMethod.GetGenericArguments()).GetParameters().SequenceEqual(targetMethod.GetParameters(), new _Comparer()))
+                            .MakeGenericMethod(targetMethod.GetGenericArguments()).GetParameters();
+                    } else {
+                        _params = this.Instance.GetType().GetMethod(targetMethod.Name, targetMethod.GetParameters().Select(x => x.ParameterType).ToArray()).GetParameters();
+                    }
+
+                    foreach(var _param in _params) {
                         _args.Add(!_param.IsOut && args[_param.Position] == null && _param.IsDefined(typeof(ServiceRequiredAttribute), false) ? (_param.ParameterType.IsInterface ? (this.Container.GetService(this.Container.ContextBinder.MakeGenericType(_param.ParameterType, this.Instance.GetType())) ?? this.Container.GetService(_param.ParameterType)) : this.Container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>())) : args[_param.Position]);
                     }
                     var _argsArray = _args.ToArray();
@@ -356,6 +369,17 @@ namespace Saraff.IoC {
             internal ServiceContainer Container {
                 get; set;
             }
+
+            private sealed class _Comparer : IEqualityComparer<ParameterInfo> {
+
+                public bool Equals(ParameterInfo x, ParameterInfo y) {
+                    return x.ParameterType == y.ParameterType;
+                }
+
+                public int GetHashCode(ParameterInfo obj) {
+                    return obj.ParameterType.GetHashCode();
+                }
+            }
         }
 #else
 
@@ -375,7 +399,38 @@ namespace Saraff.IoC {
                 var _listener = this._container.GetService(this._container.ContextBinder.MakeGenericType(this._container.Listener, this._instance.GetType())) ?? this._container.GetService(this._container.Listener);
                 try {
                     var _args = new List<object>();
-                    foreach(var _param in this._instance.GetType().GetMethod(_msg.MethodName, _msg.MethodSignature as Type[]).GetParameters()) {
+
+                    IEnumerable<ParameterInfo> _params = null;
+                    if(_msg.MethodBase.IsGenericMethod) {
+                        var _methods = new List<MethodInfo>();
+                        foreach(var _method in this._instance.GetType().GetMethods()) {
+                            if(_method.IsGenericMethod && _method.Name == _msg.MethodName && _method.GetGenericArguments().Length == _msg.MethodBase.GetGenericArguments().Length) {
+                                bool _SequenceEqual(ParameterInfo[] _seq1, ParameterInfo[] _seq2) {
+                                    if(_seq1.Length != _seq2.Length) {
+                                        return false;
+                                    }
+                                    for(int i = 0; i < _seq1.Length; i++) {
+                                        if(_seq1[i].ParameterType != _seq2[i].ParameterType) {
+                                            return false;
+                                        }
+                                    }
+                                    return true;
+                                }
+
+                                if(_SequenceEqual(_method.MakeGenericMethod(_msg.MethodBase.GetGenericArguments()).GetParameters(), _msg.MethodBase.GetParameters())) {
+                                    _methods.Add(_method);
+                                }
+                            }
+                        }
+                        if(_methods.Count != 1) {
+                            throw new InvalidOperationException();
+                        }
+                        _params = _methods[0].MakeGenericMethod(_msg.MethodBase.GetGenericArguments()).GetParameters();
+                    } else {
+                        _params = this._instance.GetType().GetMethod(_msg.MethodName, _msg.MethodSignature as Type[]).GetParameters();
+                    }
+
+                    foreach(var _param in _params) {
                         _args.Add(!_param.IsOut && _msg.GetArg(_param.Position) == null && _param.IsDefined(this._container.ServiceRequiredAttribute, false) ? (_param.ParameterType.IsInterface ? (this._container.GetService(this._container.ContextBinder.MakeGenericType(_param.ParameterType, this._instance.GetType())) ?? this._container.GetService(_param.ParameterType)) : this._container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>())) : _msg.GetArg(_param.Position));
                     }
                     var _argsArray = _args.ToArray();
