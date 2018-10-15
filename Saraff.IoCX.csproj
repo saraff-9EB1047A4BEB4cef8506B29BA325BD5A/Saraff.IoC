@@ -16,14 +16,14 @@
     <Description>Saraff.IoCX is a container that provide lightweight dependency injection for .NET applications (.NET Standard 2.0). It helps you split your application into a collection of loosely-coupled, highly-cohesive pieces, and then glue them back together in a flexible manner.</Description>
     <Company>SARAFF SOFTWARE</Company>
     <Authors>SARAFF</Authors>
-    <Version>1.0.9.634</Version>
+    <Version>1.0.10.636</Version>
     <Copyright>Copyright © SARAFF 2018</Copyright>
     <PackageLicenseUrl>http://www.gnu.org/licenses/lgpl-3.0.txt</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/saraff-9EB1047A4BEB4cef8506B29BA325BD5A/Saraff.IoC</PackageProjectUrl>
     <RepositoryUrl>https://github.com/saraff-9EB1047A4BEB4cef8506B29BA325BD5A/Saraff.IoC</RepositoryUrl>
     <PackageTags>IoC DI .net standard</PackageTags>
-    <AssemblyVersion>1.0.9.634</AssemblyVersion>
-    <FileVersion>1.0.9.634</FileVersion>
+    <AssemblyVersion>1.0.10.636</AssemblyVersion>
+    <FileVersion>1.0.10.636</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

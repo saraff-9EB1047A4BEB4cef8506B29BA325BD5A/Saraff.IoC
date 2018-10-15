@@ -70,6 +70,10 @@ namespace Saraff.IoC {
         CatchCallback CatchCallback {
             get;
         }
+
+        Type LazyCallbackType {
+            get;
+        }
     }
 
     public delegate void BindServiceCallback(Attribute attribute,BindServiceCallbackCore callback);
@@ -81,4 +85,6 @@ namespace Saraff.IoC {
     public delegate object InvokedCallback(object listener, MethodBase method, object instance, object result);
 
     public delegate Exception CatchCallback(object listener, MethodBase method, object instance, Exception ex);
+
+    public delegate T Lazy<T>() where T : class;
 }

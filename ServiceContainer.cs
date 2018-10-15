@@ -45,9 +45,9 @@ namespace Saraff.IoC {
     /// </summary>
     /// <seealso cref="System.ComponentModel.Container" />
     /// <seealso cref="System.IServiceProvider" />
-    public sealed class ServiceContainer:Container, IServiceProvider {
-        private Dictionary<Type,Type> _binding = new Dictionary<Type,Type>();
-        private Dictionary<Type,object> _instances = new Dictionary<Type,object>();
+    public sealed class ServiceContainer : Container, IServiceProvider {
+        private Dictionary<Type, Type> _binding = new Dictionary<Type, Type>();
+        private Dictionary<Type, object> _instances = new Dictionary<Type, object>();
         private Stack<Type> _stack = new Stack<Type>();
         private IConfiguration _config = null;
 
@@ -56,8 +56,8 @@ namespace Saraff.IoC {
         /// </summary>
         /// <param name="assembly">The assembly.</param>
         public void Load(Assembly assembly) {
-            foreach(Attribute _attr in assembly.GetCustomAttributes(this.BindServiceAttribute,false)) {
-                this.BindServiceCallback(_attr,this.Bind);
+            foreach(Attribute _attr in assembly.GetCustomAttributes(this.BindServiceAttribute, false)) {
+                this.BindServiceCallback(_attr, this.Bind);
             }
         }
 
@@ -69,17 +69,17 @@ namespace Saraff.IoC {
         /// <exception cref="ArgumentNullException">Отсутствует информация о связываемых типах.</exception>
         /// <exception cref="InvalidOperationException">
         /// </exception>
-        public void Bind(Type service,Type obj) {
+        public void Bind(Type service, Type obj) {
             if(service == null || obj == null) {
                 throw new ArgumentNullException("Отсутствует информация о связываемых типах.");
             }
             if(!service.IsInterface) {
-                throw new InvalidOperationException(string.Format("Тип \"{0}\" не является интерфейсом.",service.FullName));
+                throw new InvalidOperationException(string.Format("Тип \"{0}\" не является интерфейсом.", service.FullName));
             }
             if(obj.GetInterface((typeof(IComponent).FullName)) == null) {
-                throw new InvalidOperationException(string.Format("Тип \"{0}\" не является производным от \"{1}\".",obj.FullName,typeof(IComponent).FullName));
+                throw new InvalidOperationException(string.Format("Тип \"{0}\" не является производным от \"{1}\".", obj.FullName, typeof(IComponent).FullName));
             }
-            this._binding.Add(service,obj);
+            this._binding.Add(service, obj);
         }
 
         /// <summary>
@@ -88,7 +88,7 @@ namespace Saraff.IoC {
         /// <typeparam name="TService">The type of the service.</typeparam>
         /// <typeparam name="T">Type of object.</typeparam>
         public void Bind<TService, T>() {
-            this.Bind(typeof(TService),typeof(T));
+            this.Bind(typeof(TService), typeof(T));
         }
 
         /// <summary>
@@ -96,9 +96,9 @@ namespace Saraff.IoC {
         /// </summary>
         /// <param name="service">The service.</param>
         /// <param name="obj">The object.</param>
-        public void Bind(Type service,object obj) {
-            this.Bind(service,obj.GetType());
-            this._AddInstance(service,obj);
+        public void Bind(Type service, object obj) {
+            this.Bind(service, obj.GetType());
+            this._AddInstance(service, obj);
         }
 
         /// <summary>
@@ -107,7 +107,7 @@ namespace Saraff.IoC {
         /// <typeparam name="TService">The type of the service.</typeparam>
         /// <param name="obj">The object.</param>
         public void Bind<TService>(object obj) {
-            this.Bind(typeof(TService),obj);
+            this.Bind(typeof(TService), obj);
         }
 
         /// <summary>
@@ -116,7 +116,7 @@ namespace Saraff.IoC {
         /// <typeparam name="T">Тип.</typeparam>
         /// <returns>Экземпляр указанного типа.</returns>
         public T CreateInstance<T>(params CtorCallback[] args) where T : class {
-            return this.CreateInstance(typeof(T),args) as T;
+            return this.CreateInstance(typeof(T), args) as T;
         }
 
         /// <summary>
@@ -124,62 +124,76 @@ namespace Saraff.IoC {
         /// </summary>
         /// <param name="type">Тип.</param>
         /// <returns>Экземпляр указанного типа.</returns>
-        public object CreateInstance(Type type,params CtorCallback[] args) {
+        public object CreateInstance(Type type, params CtorCallback[] args) {
             try {
-                var _args = new Dictionary<string,object>();
+                var _args = new Dictionary<string, object>();
                 foreach(var _arg in args) {
-                    _arg((name,val) => _args.Add(name,val));
+                    _arg((name, val) => _args.Add(name, val));
                 }
-                return this._CreateInstanceCore(type,_args);
+                return this._CreateInstanceCore(type, _args);
             } finally {
                 this._stack.Clear();
             }
         }
 
-        private object _CreateInstanceCore(Type type,IDictionary<string,object> ctorArgs) {
+        private object _CreateInstanceCore(Type type, IDictionary<string, object> ctorArgs) {
             if(this._stack.Contains(type)) {
                 var _trace = string.Empty;
                 this._stack.Push(type);
                 foreach(var _item in this._stack) {
-                    _trace+=string.Format("  в {1}{0}",Environment.NewLine,_item.FullName);
+                    _trace += string.Format("  в {1}{0}", Environment.NewLine, _item.FullName);
                 }
-                throw new InvalidOperationException(string.Format("IoC. Обнаружена циклическая зависимость в \"{1}\".{0}Трасcировка:{0}{2}",Environment.NewLine,type.FullName,_trace));
+                throw new InvalidOperationException(string.Format("IoC. Обнаружена циклическая зависимость в \"{1}\".{0}Трасcировка:{0}{2}", Environment.NewLine, type.FullName, _trace));
             }
             this._stack.Push(type);
             try {
-                var _inst = new _Func(()=> {
+                object _Factory() {
                     foreach(var _ctor in type.GetConstructors()) {
-                        if(_ctor.IsDefined(this.ServiceRequiredAttribute,false)) {
+                        if(_ctor.IsDefined(this.ServiceRequiredAttribute, false)) {
                             var _args = new List<object>();
                             foreach(var _param in _ctor.GetParameters()) {
-                                if(_param.ParameterType.IsGenericType&&_param.ParameterType.GetGenericTypeDefinition()==this.ContextBinder) {
+                                if(_param.ParameterType.IsGenericType && _param.ParameterType.GetGenericTypeDefinition() == this.ContextBinder) {
                                     _args.Add(null);
                                 } else {
-                                    _args.Add(ctorArgs.ContainsKey(_param.Name) ? ctorArgs[_param.Name] : (_param.ParameterType.IsInterface ? (this.GetService(this.ContextBinder.MakeGenericType(_param.ParameterType,type))??this.GetService(_param.ParameterType)) : this._CreateInstanceCore(_param.ParameterType,new Dictionary<string,object>())));
+                                    _args.Add(
+                                        ctorArgs.ContainsKey(_param.Name) ? 
+                                            ctorArgs[_param.Name] : 
+                                            (_param.ParameterType.IsGenericType && _param.ParameterType.GetGenericTypeDefinition() == this.LazyCallbackType ? 
+                                                (Activator.CreateInstance(typeof(_Lazy<,>).MakeGenericType(type, _param.ParameterType.GetGenericArguments()[0]), this) as _ILazy).CreateLazyService() : 
+                                                (_param.ParameterType.IsInterface ? 
+                                                    (this.GetService(this.ContextBinder.MakeGenericType(_param.ParameterType, type)) ?? this.GetService(_param.ParameterType)) : 
+                                                    this._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>()))));
                                 }
                             }
-                            return Activator.CreateInstance(type,_args.ToArray());
+                            return Activator.CreateInstance(type, _args.ToArray());
                         }
                     }
-                    if(type.GetConstructor(Type.EmptyTypes)!=null) {
+                    if(type.GetConstructor(Type.EmptyTypes) != null) {
                         return Activator.CreateInstance(type);
                     }
-                    throw new InvalidOperationException(string.Format("IoC. Не удалось найти подходящий конструктор для создания экземпляра \"{0}\".",type.FullName));
-                })();
+                    throw new InvalidOperationException(string.Format("IoC. Не удалось найти подходящий конструктор для создания экземпляра \"{0}\".", type.FullName));
+                };
+                var _instance = _Factory();
                 foreach(var _prop in type.GetProperties()) {
-                    if(_prop.IsDefined(this.ServiceRequiredAttribute,false)) {
-                        if(_prop.PropertyType.IsGenericType&&_prop.PropertyType.GetGenericTypeDefinition()==this.ContextBinder) {
-                            _prop.SetValue(_inst,null,null);
+                    if(_prop.IsDefined(this.ServiceRequiredAttribute, false)) {
+                        if(_prop.PropertyType.IsGenericType && _prop.PropertyType.GetGenericTypeDefinition() == this.ContextBinder) {
+                            _prop.SetValue(_instance, null, null);
                         } else {
-                            _prop.SetValue(_inst,_prop.PropertyType.IsInterface ? (this.GetService(this.ContextBinder.MakeGenericType(_prop.PropertyType,type))??this.GetService(_prop.PropertyType)) : this._CreateInstanceCore(_prop.PropertyType,new Dictionary<string,object>()),null);
+                            _prop.SetValue(
+                                _instance,
+                                _prop.PropertyType.IsGenericType && _prop.PropertyType.GetGenericTypeDefinition() == this.LazyCallbackType ?
+                                    (Activator.CreateInstance(typeof(_Lazy<,>).MakeGenericType(type, _prop.PropertyType.GetGenericArguments()[0]), this) as _ILazy).CreateLazyService() :
+                                    (_prop.PropertyType.IsInterface ?
+                                        (this.GetService(this.ContextBinder.MakeGenericType(_prop.PropertyType, type)) ?? this.GetService(_prop.PropertyType)) :
+                                        this._CreateInstanceCore(_prop.PropertyType, new Dictionary<string, object>())),
+                                null);
                         }
                     }
                 }
-                var _component = _inst as IComponent;
-                if(_component != null) {
+                if(_instance is IComponent _component) {
                     this.Add(_component);
                 }
-                return _inst;
+                return _instance;
             } finally {
                 this._stack.Pop();
             }
@@ -210,7 +224,7 @@ namespace Saraff.IoC {
         protected override object GetService(Type service) {
             if(this._binding.ContainsKey(service)) {
                 if(!this._instances.ContainsKey(service)) {
-                    this._AddInstance(service,this._CreateInstanceCore(this._binding[service],new Dictionary<string,object>()));
+                    this._AddInstance(service, this._CreateInstanceCore(this._binding[service], new Dictionary<string, object>()));
                 }
                 return this._instances[service];
             }
@@ -235,83 +249,76 @@ namespace Saraff.IoC {
             }
         }
 
-        private Type ServiceRequiredAttribute {
-            get {
-                return this.ConfigurationService?.ServiceRequiredAttributeType ?? typeof(ServiceRequiredAttribute);
-            }
-        }
+        private Type ServiceRequiredAttribute => this.ConfigurationService?.ServiceRequiredAttributeType ?? typeof(ServiceRequiredAttribute);
 
-        private Type BindServiceAttribute {
-            get {
-                return this.ConfigurationService?.BindServiceAttributeType ?? typeof(BindServiceAttribute);
-            }
-        }
+        private Type BindServiceAttribute => this.ConfigurationService?.BindServiceAttributeType ?? typeof(BindServiceAttribute);
 
-        private Type ProxyRequiredAttribute {
-            get {
-                return this.ConfigurationService?.ProxyRequiredAttributeType ?? typeof(ProxyRequiredAttribute);
-            }
-        }
+        private Type ProxyRequiredAttribute => this.ConfigurationService?.ProxyRequiredAttributeType ?? typeof(ProxyRequiredAttribute);
 
         private BindServiceCallback BindServiceCallback {
             get {
                 return this.ConfigurationService?.BindServiceCallback ?? new BindServiceCallback((x, callback) => {
-                    var _attr = x as BindServiceAttribute;
-                    if(_attr != null) {
+                    if(x is BindServiceAttribute _attr) {
                         callback(_attr.Service, _attr.ObjectType);
                     }
                 });
             }
         }
 
-        private Type ContextBinder {
-            get {
-                return this.ConfigurationService?.ContextBinderType?.GetGenericTypeDefinition() ?? typeof(IContextBinder<,>);
-            }
-        }
+        private Type ContextBinder => this.ConfigurationService?.ContextBinderType?.GetGenericTypeDefinition() ?? typeof(IContextBinder<,>);
 
-        private Type Listener {
-            get {
-                return this.ConfigurationService?.ListenerType ?? typeof(IListener);
-            }
-        }
+        private Type Listener => this.ConfigurationService?.ListenerType ?? typeof(IListener);
 
-        private InvokingCallback InvokingCallback {
-            get {
-                return this.ConfigurationService?.InvokingCallback ?? new InvokingCallback((listener, method, instance, parameters) => (listener as IListener)?.OnInvoking(method, instance, parameters));
-            }
-        }
+        private InvokingCallback InvokingCallback => this.ConfigurationService?.InvokingCallback ?? new InvokingCallback((listener, method, instance, parameters) => (listener as IListener)?.OnInvoking(method, instance, parameters));
 
-        private InvokedCallback InvokedCallback {
-            get {
-                return this.ConfigurationService?.InvokedCallback ?? new InvokedCallback((listener, method, instance, result) => (listener as IListener)?.OnInvoked(method, instance, result));
-            }
-        }
+        private InvokedCallback InvokedCallback => this.ConfigurationService?.InvokedCallback ?? new InvokedCallback((listener, method, instance, result) => (listener as IListener)?.OnInvoked(method, instance, result));
 
-        private CatchCallback CatchCallback {
-            get {
-                return this.ConfigurationService?.CatchCallback ?? new CatchCallback((listener, method, instance, ex) => (listener as IListener)?.OnCatch(method, instance, ex));
-            }
-        }
+        private CatchCallback CatchCallback => this.ConfigurationService?.CatchCallback ?? new CatchCallback((listener, method, instance, ex) => (listener as IListener)?.OnCatch(method, instance, ex));
+
+        private Type LazyCallbackType => this.ConfigurationService?.LazyCallbackType?.GetGenericTypeDefinition() ?? typeof(Lazy<>);
 
         private IConfiguration ConfigurationService {
             get {
-                if(this._config==null&&this._binding.ContainsKey(typeof(IConfiguration))) {
+                if(this._config == null && this._binding.ContainsKey(typeof(IConfiguration))) {
                     var _component = Activator.CreateInstance(this._binding[typeof(IConfiguration)]) as IComponent;
-                    if(_component!=null) {
+                    if(_component != null) {
                         this.Add(_component);
-                        this._config=_component as IConfiguration;
+                        this._config = _component as IConfiguration;
                     }
                 }
                 return this._config;
             }
         }
 
-        private delegate object _Func();
-
         public delegate void CtorCallback(CtorCallbackCore callback);
 
-        public delegate void CtorCallbackCore(string name,object val);
+        public delegate void CtorCallbackCore(string name, object val);
+
+        private interface _ILazy {
+
+            Delegate CreateLazyService();
+        }
+
+        private sealed class _Lazy<T, TResult> : _ILazy where TResult : class {
+
+            public _Lazy(ServiceContainer container) {
+                this.Container = container;
+            }
+
+            public Delegate CreateLazyService() {
+                if(typeof(TResult).IsGenericType && typeof(TResult).GetGenericTypeDefinition() == this.Container.ContextBinder) {
+                    return null;
+                }
+                return Delegate.CreateDelegate(this.Container.LazyCallbackType.MakeGenericType(typeof(TResult)), this, new Lazy<TResult>(this.GetService).Method);
+            }
+
+            private TResult GetService() => (typeof(TResult).IsInterface ? (this.Container.GetService(this.Container.ContextBinder.MakeGenericType(typeof(TResult), typeof(T))) ?? this.Container.GetService(typeof(TResult))) : this.Container._CreateInstanceCore(typeof(TResult), new Dictionary<string, object>())) as TResult;
+
+            private ServiceContainer Container {
+                get;
+                set;
+            }
+        }
 
 #if NETSTANDARD2_0
 
@@ -338,7 +345,14 @@ namespace Saraff.IoC {
                     }
 
                     foreach(var _param in _params) {
-                        _args.Add(!_param.IsOut && args[_param.Position] == null && _param.IsDefined(typeof(ServiceRequiredAttribute), false) ? (_param.ParameterType.IsInterface ? (this.Container.GetService(this.Container.ContextBinder.MakeGenericType(_param.ParameterType, this.Instance.GetType())) ?? this.Container.GetService(_param.ParameterType)) : this.Container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>())) : args[_param.Position]);
+                        _args.Add(
+                            !_param.IsOut && args[_param.Position] == null && _param.IsDefined(typeof(ServiceRequiredAttribute), false) ? 
+                                (_param.ParameterType.IsGenericType && _param.ParameterType.GetGenericTypeDefinition() == this.Container.LazyCallbackType ?
+                                    (Activator.CreateInstance(typeof(_Lazy<,>).MakeGenericType(this.Instance.GetType(), _param.ParameterType.GetGenericArguments()[0]), this.Container) as _ILazy).CreateLazyService() : 
+                                    (_param.ParameterType.IsInterface ? 
+                                        (this.Container.GetService(this.Container.ContextBinder.MakeGenericType(_param.ParameterType, this.Instance.GetType())) ?? this.Container.GetService(_param.ParameterType)) : 
+                                        this.Container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>()))) : 
+                                args[_param.Position]);
                     }
                     var _argsArray = _args.ToArray();
 
@@ -431,7 +445,14 @@ namespace Saraff.IoC {
                     }
 
                     foreach(var _param in _params) {
-                        _args.Add(!_param.IsOut && _msg.GetArg(_param.Position) == null && _param.IsDefined(this._container.ServiceRequiredAttribute, false) ? (_param.ParameterType.IsInterface ? (this._container.GetService(this._container.ContextBinder.MakeGenericType(_param.ParameterType, this._instance.GetType())) ?? this._container.GetService(_param.ParameterType)) : this._container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>())) : _msg.GetArg(_param.Position));
+                        _args.Add(
+                            !_param.IsOut && _msg.GetArg(_param.Position) == null && _param.IsDefined(this._container.ServiceRequiredAttribute, false) ? 
+                                (_param.ParameterType.IsGenericType && _param.ParameterType.GetGenericTypeDefinition() == this._container.LazyCallbackType ? 
+                                    (Activator.CreateInstance(typeof(_Lazy<,>).MakeGenericType(this._instance.GetType(), _param.ParameterType.GetGenericArguments()[0]), this._container) as _ILazy).CreateLazyService() : 
+                                    (_param.ParameterType.IsInterface ? 
+                                        (this._container.GetService(this._container.ContextBinder.MakeGenericType(_param.ParameterType, this._instance.GetType())) ?? this._container.GetService(_param.ParameterType)) : 
+                                        this._container._CreateInstanceCore(_param.ParameterType, new Dictionary<string, object>()))) : 
+                                _msg.GetArg(_param.Position));
                     }
                     var _argsArray = _args.ToArray();
 
