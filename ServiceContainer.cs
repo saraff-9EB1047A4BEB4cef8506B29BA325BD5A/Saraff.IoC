@@ -48,7 +48,8 @@ namespace Saraff.IoC {
     public sealed class ServiceContainer : Container, IServiceProvider {
         private Dictionary<Type, Type> _binding = new Dictionary<Type, Type>();
         private Dictionary<Type, object> _instances = new Dictionary<Type, object>();
-        private Stack<Type> _stack = new Stack<Type>();
+        private Stack<Type> _stack = null;
+        private Stack<Stack<Type>> _frames = new Stack<Stack<Type>>();
         private IConfiguration _config = null;
 
         /// <summary>
@@ -125,6 +126,8 @@ namespace Saraff.IoC {
         /// <param name="type">Тип.</param>
         /// <returns>Экземпляр указанного типа.</returns>
         public object CreateInstance(Type type, params CtorCallback[] args) {
+            this._frames.Push(_stack);
+            this._stack = new Stack<Type>();
             try {
                 var _args = new Dictionary<string, object>();
                 foreach(var _arg in args) {
@@ -132,7 +135,7 @@ namespace Saraff.IoC {
                 }
                 return this._CreateInstanceCore(type, _args);
             } finally {
-                this._stack.Clear();
+                this._stack = this._frames.Pop();
             }
         }
 
@@ -220,10 +223,12 @@ namespace Saraff.IoC {
         /// service.
         /// </returns>
         object IServiceProvider.GetService(Type serviceType) {
+            this._frames.Push(_stack);
+            this._stack = new Stack<Type>();
             try {
                 return this.GetService(serviceType);
             } finally {
-                this._stack.Clear();
+                this._stack = this._frames.Pop();
             }
         }
 
