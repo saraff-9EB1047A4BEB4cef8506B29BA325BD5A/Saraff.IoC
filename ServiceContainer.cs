@@ -48,7 +48,7 @@ namespace Saraff.IoC {
     public sealed class ServiceContainer : Container, IServiceProvider {
         private Dictionary<Type, Type> _binding = new Dictionary<Type, Type>();
         private Dictionary<Type, object> _instances = new Dictionary<Type, object>();
-        private Stack<Type> _stack = null;
+        private Stack<Type> _stack = new Stack<Type>();
         private Stack<Stack<Type>> _frames = new Stack<Stack<Type>>();
         private IConfiguration _config = null;
 
