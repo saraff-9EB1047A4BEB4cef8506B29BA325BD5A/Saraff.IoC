@@ -51,6 +51,15 @@ namespace Saraff.IoC {
         private Stack<Type> _stack = new Stack<Type>();
         private Stack<Stack<Type>> _frames = new Stack<Stack<Type>>();
         private IConfiguration _config = null;
+        private List<ServiceContainer> _nested = new List<ServiceContainer>();
+
+        public ServiceContainer Parent { get; private set; }
+
+        public ServiceContainer CreateNestedContainer() {
+            var _container = new ServiceContainer { Parent = this, _config = this._config };
+            this._nested.Add(_container);
+            return _container;
+        }
 
         /// <summary>
         /// Выполняет загрузку привязок из указанной сборки.
@@ -209,7 +218,7 @@ namespace Saraff.IoC {
                 }
                 return this._instances[service];
             }
-            return base.GetService(service);
+            return this.Parent?.GetService(service) ?? base.GetService(service);
         }
 
         /// <summary>
@@ -241,6 +250,18 @@ namespace Saraff.IoC {
                 (type.IsInterface ?
                     (this.GetService(this.ContextBinder.MakeGenericType(type, context)) ?? this.GetService(type)) :
                     this._CreateInstanceCore(type, new Dictionary<string, object>()));
+        }
+
+        protected override void Dispose(bool disposing) {
+            if(this._nested != null) {
+                foreach(var _item in this._nested) {
+                    _item.Dispose();
+                }
+                this._nested = null;
+                this._binding = null;
+                this._instances = null;
+            }
+            base.Dispose(disposing);
         }
 
         private Type ServiceRequiredAttribute => this.ConfigurationService?.ServiceRequiredAttributeType ?? typeof(ServiceRequiredAttribute);
