@@ -257,11 +257,11 @@ namespace Saraff.IoC {
                 foreach(var _item in this._nested) {
                     _item.Dispose();
                 }
-                this._nested = null;
-                this._binding = null;
-                this._instances = null;
             }
             base.Dispose(disposing);
+            this._nested = null;
+            this._binding = null;
+            this._instances = null;
         }
 
         private Type ServiceRequiredAttribute => this.ConfigurationService?.ServiceRequiredAttributeType ?? typeof(ServiceRequiredAttribute);

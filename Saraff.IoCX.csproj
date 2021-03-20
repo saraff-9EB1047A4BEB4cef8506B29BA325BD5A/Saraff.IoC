@@ -5,6 +5,9 @@
     <SccProvider>SubversionScc</SccProvider>
     <SccAuxPath>Svn</SccAuxPath>
     <SccLocalPath>Svn</SccLocalPath>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -16,20 +19,28 @@
     <Description>Saraff.IoCX is a container that provide lightweight dependency injection for .NET applications (.NET Standard 2.0). It helps you split your application into a collection of loosely-coupled, highly-cohesive pieces, and then glue them back together in a flexible manner.</Description>
     <Company>SARAFF SOFTWARE</Company>
     <Authors>SARAFF</Authors>
-    <Version>1.0.11.670</Version>
+    <Version>1.0.13.726</Version>
     <Copyright>Copyright © SARAFF 2018</Copyright>
     <PackageLicenseUrl></PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/saraff-9EB1047A4BEB4cef8506B29BA325BD5A/Saraff.IoC</PackageProjectUrl>
     <RepositoryUrl>https://github.com/saraff-9EB1047A4BEB4cef8506B29BA325BD5A/Saraff.IoC.git</RepositoryUrl>
     <PackageTags>IoC DI .net standard</PackageTags>
-    <AssemblyVersion>1.0.11.670</AssemblyVersion>
-    <FileVersion>1.0.11.670</FileVersion>
+    <AssemblyVersion>1.0.13.726</AssemblyVersion>
+    <FileVersion>1.0.13.726</FileVersion>
     <PackageLicenseExpression>LGPL-3.0-or-later</PackageLicenseExpression>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="System.Reflection.DispatchProxy" Version="4.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Properties\" />
   </ItemGroup>
 
 </Project>
