@@ -27,6 +27,9 @@
  * along with Saraff.IoC. If not, see <http://www.gnu.org/licenses/>.
  * 
  */
+
+#if !NETSTANDARD
+
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -61,7 +64,9 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.0.13.726")]
-[assembly: AssemblyFileVersion("1.0.13.726")]
+[assembly: AssemblyVersion("1.0.14.738")]
+[assembly: AssemblyFileVersion("1.0.14.738")]
 
-[assembly: AssemblyInformationalVersion("1.0.13.726")]
+[assembly: AssemblyInformationalVersion("1.0.14.738")]
+
+#endif
