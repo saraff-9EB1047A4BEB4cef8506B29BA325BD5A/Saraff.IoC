@@ -56,9 +56,11 @@ namespace Saraff.IoC {
         public ServiceContainer Parent { get; private set; }
 
         public ServiceContainer CreateNestedContainer() {
-            var _container = new ServiceContainer { Parent = this, _config = this._config };
-            this._nested.Add(_container);
-            return _container;
+            lock(this) {
+                var _container = new ServiceContainer { Parent = this, _config = this._config };
+                this._nested.Add(_container);
+                return _container;
+            }
         }
 
         /// <summary>
@@ -66,8 +68,10 @@ namespace Saraff.IoC {
         /// </summary>
         /// <param name="assembly">The assembly.</param>
         public void Load(Assembly assembly) {
-            foreach(Attribute _attr in assembly.GetCustomAttributes(this.BindServiceAttribute, false)) {
-                this.BindServiceCallback(_attr, this.Bind);
+            lock(this) {
+                foreach(Attribute _attr in assembly.GetCustomAttributes(this.BindServiceAttribute, false)) {
+                    this.BindServiceCallback(_attr, this.Bind);
+                }
             }
         }
 
@@ -80,16 +84,18 @@ namespace Saraff.IoC {
         /// <exception cref="InvalidOperationException">
         /// </exception>
         public void Bind(Type service, Type obj) {
-            if(service == null || obj == null) {
-                throw new ArgumentNullException("Отсутствует информация о связываемых типах.");
+            lock(this) {
+                if(service == null || obj == null) {
+                    throw new ArgumentNullException("Отсутствует информация о связываемых типах.");
+                }
+                if(!service.IsInterface) {
+                    throw new InvalidOperationException(string.Format("Тип \"{0}\" не является интерфейсом.", service.FullName));
+                }
+                if(obj.GetInterface((typeof(IComponent).FullName)) == null) {
+                    throw new InvalidOperationException(string.Format("Тип \"{0}\" не является производным от \"{1}\".", obj.FullName, typeof(IComponent).FullName));
+                }
+                this._binding.Add(service, obj);
             }
-            if(!service.IsInterface) {
-                throw new InvalidOperationException(string.Format("Тип \"{0}\" не является интерфейсом.", service.FullName));
-            }
-            if(obj.GetInterface((typeof(IComponent).FullName)) == null) {
-                throw new InvalidOperationException(string.Format("Тип \"{0}\" не является производным от \"{1}\".", obj.FullName, typeof(IComponent).FullName));
-            }
-            this._binding.Add(service, obj);
         }
 
         /// <summary>
@@ -97,9 +103,7 @@ namespace Saraff.IoC {
         /// </summary>
         /// <typeparam name="TService">The type of the service.</typeparam>
         /// <typeparam name="T">Type of object.</typeparam>
-        public void Bind<TService, T>() {
-            this.Bind(typeof(TService), typeof(T));
-        }
+        public void Bind<TService, T>() => this.Bind(typeof(TService), typeof(T));
 
         /// <summary>
         /// Binds the specified service.
@@ -107,8 +111,10 @@ namespace Saraff.IoC {
         /// <param name="service">The service.</param>
         /// <param name="obj">The object.</param>
         public void Bind(Type service, object obj) {
-            this.Bind(service, obj.GetType());
-            this._AddInstance(service, obj);
+            lock(this) {
+                this.Bind(service, obj.GetType());
+                this._AddInstance(service, obj);
+            }
         }
 
         /// <summary>
@@ -116,18 +122,14 @@ namespace Saraff.IoC {
         /// </summary>
         /// <typeparam name="TService">The type of the service.</typeparam>
         /// <param name="obj">The object.</param>
-        public void Bind<TService>(object obj) {
-            this.Bind(typeof(TService), obj);
-        }
+        public void Bind<TService>(object obj) => this.Bind(typeof(TService), obj);
 
         /// <summary>
         /// Создает экземпляр указанного типа и осуществляет внедрение зависимостей.
         /// </summary>
         /// <typeparam name="T">Тип.</typeparam>
         /// <returns>Экземпляр указанного типа.</returns>
-        public T CreateInstance<T>(params CtorCallback[] args) where T : class {
-            return this.CreateInstance(typeof(T), args) as T;
-        }
+        public T CreateInstance<T>(params CtorCallback[] args) where T : class => this.CreateInstance(typeof(T), args) as T;
 
         /// <summary>
         /// Создает экземпляр указанного типа и осуществляет внедрение зависимостей.
@@ -135,16 +137,18 @@ namespace Saraff.IoC {
         /// <param name="type">Тип.</param>
         /// <returns>Экземпляр указанного типа.</returns>
         public object CreateInstance(Type type, params CtorCallback[] args) {
-            this._frames.Push(_stack);
-            this._stack = new Stack<Type>();
-            try {
-                var _args = new Dictionary<string, object>();
-                foreach(var _arg in args) {
-                    _arg((name, val) => _args.Add(name, val));
+            lock(this) {
+                this._frames.Push(_stack);
+                this._stack = new Stack<Type>();
+                try {
+                    var _args = new Dictionary<string, object>();
+                    foreach(var _arg in args) {
+                        _arg((name, val) => _args.Add(name, val));
+                    }
+                    return this._CreateInstanceCore(type, _args);
+                } finally {
+                    this._stack = this._frames.Pop();
                 }
-                return this._CreateInstanceCore(type, _args);
-            } finally {
-                this._stack = this._frames.Pop();
             }
         }
 
@@ -212,13 +216,15 @@ namespace Saraff.IoC {
         /// service.
         /// </returns>
         protected override object GetService(Type service) {
-            if(this._binding.ContainsKey(service)) {
-                if(!this._instances.ContainsKey(service)) {
-                    this._AddInstance(service, this._CreateInstanceCore(this._binding[service], new Dictionary<string, object>()));
+            lock(this) {
+                if(this._binding.ContainsKey(service)) {
+                    if(!this._instances.ContainsKey(service)) {
+                        this._AddInstance(service, this._CreateInstanceCore(this._binding[service], new Dictionary<string, object>()));
+                    }
+                    return this._instances[service];
                 }
-                return this._instances[service];
+                return this.Parent?.GetService(service) ?? base.GetService(service);
             }
-            return this.Parent?.GetService(service) ?? base.GetService(service);
         }
 
         /// <summary>
@@ -232,12 +238,14 @@ namespace Saraff.IoC {
         /// service.
         /// </returns>
         object IServiceProvider.GetService(Type serviceType) {
-            this._frames.Push(_stack);
-            this._stack = new Stack<Type>();
-            try {
-                return this.GetService(serviceType);
-            } finally {
-                this._stack = this._frames.Pop();
+            lock(this) {
+                this._frames.Push(_stack);
+                this._stack = new Stack<Type>();
+                try {
+                    return this.GetService(serviceType);
+                } finally {
+                    this._stack = this._frames.Pop();
+                }
             }
         }
 
@@ -270,15 +278,11 @@ namespace Saraff.IoC {
 
         private Type ProxyRequiredAttribute => this.ConfigurationService?.ProxyRequiredAttributeType ?? typeof(ProxyRequiredAttribute);
 
-        private BindServiceCallback BindServiceCallback {
-            get {
-                return this.ConfigurationService?.BindServiceCallback ?? new BindServiceCallback((x, callback) => {
-                    if(x is BindServiceAttribute _attr) {
-                        callback(_attr.Service, _attr.ObjectType);
-                    }
-                });
+        private BindServiceCallback BindServiceCallback => this.ConfigurationService?.BindServiceCallback ?? new BindServiceCallback((x, callback) => {
+            if(x is BindServiceAttribute _attr) {
+                callback(_attr.Service, _attr.ObjectType);
             }
-        }
+        });
 
         private Type ContextBinder => this.ConfigurationService?.ContextBinderType?.GetGenericTypeDefinition() ?? typeof(IContextBinder<,>);
 
@@ -295,8 +299,7 @@ namespace Saraff.IoC {
         private IConfiguration ConfigurationService {
             get {
                 if(this._config == null && this._binding.ContainsKey(typeof(IConfiguration))) {
-                    var _component = Activator.CreateInstance(this._binding[typeof(IConfiguration)]) as IComponent;
-                    if(_component != null) {
+                    if(Activator.CreateInstance(this._binding[typeof(IConfiguration)]) is IComponent _component) {
                         this.Add(_component);
                         this._config = _component as IConfiguration;
                     }
@@ -327,12 +330,13 @@ namespace Saraff.IoC {
                 return Delegate.CreateDelegate(this.Container.LazyCallbackType.MakeGenericType(typeof(TResult)), this, new Lazy<TResult>(this.GetService).Method);
             }
 
-            private TResult GetService() => this.Container._GetServiceCore(typeof(TResult), typeof(T)) as TResult;
-
-            private ServiceContainer Container {
-                get;
-                set;
+            private TResult GetService() {
+                lock(this.Container) {
+                    return this.Container._GetServiceCore(typeof(TResult), typeof(T)) as TResult;
+                }
             }
+
+            private ServiceContainer Container { get; set; }
         }
 
 #if NETSTANDARD2_0
@@ -343,7 +347,7 @@ namespace Saraff.IoC {
             }
 
             protected override object Invoke(MethodInfo targetMethod, object[] args) {
-                var _listener = this.Container.GetService(this.Container.ContextBinder.MakeGenericType(this.Container.Listener, this.Instance.GetType())) ?? this.Container.GetService(this.Container.Listener);
+                var _listener = (this.Container as IServiceProvider).GetService(this.Container.ContextBinder.MakeGenericType(this.Container.Listener, this.Instance.GetType())) ?? (this.Container as IServiceProvider).GetService(this.Container.Listener);
                 try {
                     var _args = new List<object>();
 
@@ -387,23 +391,15 @@ namespace Saraff.IoC {
                 return _proxy;
             }
 
-            internal object Instance {
-                get; set;
-            }
+            internal object Instance { get; set; }
 
-            internal ServiceContainer Container {
-                get; set;
-            }
+            internal ServiceContainer Container { get; set; }
 
             private sealed class _Comparer : IEqualityComparer<ParameterInfo> {
 
-                public bool Equals(ParameterInfo x, ParameterInfo y) {
-                    return x.ParameterType == y.ParameterType;
-                }
+                public bool Equals(ParameterInfo x, ParameterInfo y) => x.ParameterType == y.ParameterType;
 
-                public int GetHashCode(ParameterInfo obj) {
-                    return obj.ParameterType.GetHashCode();
-                }
+                public int GetHashCode(ParameterInfo obj) => obj.ParameterType.GetHashCode();
             }
         }
 #else
@@ -421,7 +417,7 @@ namespace Saraff.IoC {
             [SecurityPermissionAttribute(SecurityAction.LinkDemand, Flags = SecurityPermissionFlag.Infrastructure)]
             public override IMessage Invoke(IMessage msg) {
                 var _msg = msg as IMethodCallMessage;
-                var _listener = this._container.GetService(this._container.ContextBinder.MakeGenericType(this._container.Listener, this._instance.GetType())) ?? this._container.GetService(this._container.Listener);
+                var _listener = (this._container as IServiceProvider).GetService(this._container.ContextBinder.MakeGenericType(this._container.Listener, this._instance.GetType())) ?? (this._container as IServiceProvider).GetService(this._container.Listener);
                 try {
                     var _args = new List<object>();
 
