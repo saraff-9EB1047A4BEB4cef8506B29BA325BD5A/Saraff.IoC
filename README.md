@@ -11,6 +11,10 @@ Targets: `net40`, `netstandard2.0`.
 
 Async initialization and `DisposeAsync` are available in the `netstandard2.0` assembly.
 
+## Documentation
+
+See the [documentation site](https://saraff-9eb1047a4beb4cef8506b29ba325bd5a.github.io/saraffioc/) for guides, API reference and examples.
+
 ## Features
 
 - Constructor and property injection via attributes (`[ServiceRequired]`).
