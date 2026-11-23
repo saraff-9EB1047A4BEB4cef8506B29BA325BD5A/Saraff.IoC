@@ -4,20 +4,28 @@ on:
   push:
     branches: [ master ]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  build-test:
     name: build & test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest, windows-latest ]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -34,4 +42,15 @@ jobs:
 
       - name: Pack
         if: matrix.os == 'ubuntu-latest'
-        run: dotnet pack Saraff.IoC.csproj -c Release --no-build
+        run: dotnet pack Saraff.IoC.csproj -c Release --no-build -p:PackageOutputPath=${{ github.workspace }}/artifacts
+
+      - name: Upload package artifact
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+          if-no-files-found: error
+          retention-days: 7

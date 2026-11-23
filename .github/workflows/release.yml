@@ -1,0 +1,186 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version to publish (e.g. 2.0.1 or 2.0.1-beta.1)'
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  CONFIGURATION: Release
+
+jobs:
+  publish:
+    name: Build, test & publish to nuget.org
+    runs-on: windows-latest
+    timeout-minutes: 45
+    environment: nuget
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve package version
+        id: version
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $version = if ($env:EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_VERSION } else { $env:REF_NAME }
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw 'Package version is empty.'
+          }
+          $version = $version.Trim() -replace '^[vV]', ''
+          if ($version -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$') {
+            throw "Invalid package version '$version'. Use SemVer such as 2.0.1 or 2.0.1-beta.1."
+          }
+          [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "version=$version`n")
+          Write-Host "Package version: $version"
+
+      - name: Restore
+        run: dotnet restore Saraff.IoC.sln
+
+      - name: Build
+        run: >-
+          dotnet build Saraff.IoC.sln
+          -c ${{ env.CONFIGURATION }}
+          --no-restore
+          -p:Version=${{ steps.version.outputs.version }}
+          -p:ContinuousIntegrationBuild=true
+
+      - name: Test
+        run: >-
+          dotnet test Saraff.IoC.sln
+          -c ${{ env.CONFIGURATION }}
+          --no-build
+          -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Pack
+        run: >-
+          dotnet pack Saraff.IoC.csproj
+          -c ${{ env.CONFIGURATION }}
+          --no-build
+          -p:Version=${{ steps.version.outputs.version }}
+          -p:PackageOutputPath=${{ github.workspace }}/artifacts
+
+      - name: Verify package
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+          $packages = @(Get-ChildItem artifacts -Filter '*.nupkg')
+          if ($packages.Count -ne 1) {
+            throw "Expected exactly one .nupkg in artifacts, found $($packages.Count)."
+          }
+          $symbols = @(Get-ChildItem artifacts -Filter '*.snupkg')
+          if ($symbols.Count -ne 1) {
+            throw "Expected exactly one .snupkg in artifacts, found $($symbols.Count)."
+          }
+
+          $package = $packages[0]
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
+          try {
+            $nuspecEntry = $zip.GetEntry('Saraff.IoC.nuspec')
+            if ($null -eq $nuspecEntry) {
+              throw "Package '$($package.Name)' has no Saraff.IoC.nuspec."
+            }
+            $reader = New-Object System.IO.StreamReader($nuspecEntry.Open())
+            try {
+              [xml]$nuspec = $reader.ReadToEnd()
+            } finally {
+              $reader.Dispose()
+            }
+            $entries = @($zip.Entries | ForEach-Object FullName)
+          } finally {
+            $zip.Dispose()
+          }
+
+          if ($nuspec.package.metadata.id -ne 'Saraff.IoC') {
+            throw "Unexpected package id '$($nuspec.package.metadata.id)'."
+          }
+          if ($nuspec.package.metadata.version -ne $env:VERSION) {
+            throw "Package version '$($nuspec.package.metadata.version)' does not match '$env:VERSION'."
+          }
+
+          $required = @(
+            'lib/net40/Saraff.IoC.dll',
+            'lib/netstandard2.0/Saraff.IoC.dll',
+            'README.md',
+            'LICENSE.md'
+          )
+          foreach ($entry in $required) {
+            if ($entries -notcontains $entry) {
+              throw "Package '$($package.Name)' is missing '$entry'."
+            }
+          }
+
+          Write-Host "Verified $($package.Name) and $($symbols[0].Name)."
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-${{ steps.version.outputs.version }}
+          path: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Validate NuGet user
+        shell: pwsh
+        env:
+          NUGET_USER: ${{ secrets.NUGET_USER }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:NUGET_USER)) {
+            throw 'Repository secret NUGET_USER is not configured. Add your nuget.org profile username (not your email).'
+          }
+
+      - name: NuGet login (OIDC)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Publish to nuget.org
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          $source = 'https://api.nuget.org/v3/index.json'
+          Get-ChildItem artifacts -Filter '*.nupkg' | ForEach-Object {
+            dotnet nuget push $_.FullName --api-key $env:NUGET_API_KEY --source $source --skip-duplicate
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to push $($_.Name) to nuget.org."
+            }
+          }
+          Get-ChildItem artifacts -Filter '*.snupkg' | ForEach-Object {
+            dotnet nuget push $_.FullName --api-key $env:NUGET_API_KEY --source $source --skip-duplicate
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to push $($_.Name) to nuget.org."
+            }
+          }
