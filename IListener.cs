@@ -27,18 +27,16 @@
  * along with Saraff.IoC. If not, see <http://www.gnu.org/licenses/>.
  */
 using System;
-using System.Collections.Generic;
 using System.Reflection;
-using System.Text;
 
 namespace Saraff.IoC {
 
     public interface IListener {
 
-        object OnInvoking(MethodBase method, object instance, object[] parameters);
+        InvocationResult OnInvoking(MethodBase method, object instance, object[] parameters);
 
-        object OnInvoked(MethodBase method, object instance, object result);
+        InvocationResult OnInvoked(MethodBase method, object instance, object result);
 
-        Exception OnCatch(MethodBase method, object instance, Exception ex);
+        InvocationResult OnCatch(MethodBase method, object instance, Exception ex);
     }
 }

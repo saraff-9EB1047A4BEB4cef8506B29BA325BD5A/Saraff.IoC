@@ -27,64 +27,29 @@
  * along with Saraff.IoC. If not, see <http://www.gnu.org/licenses/>.
  */
 using System;
-using System.Collections.Generic;
 using System.Reflection;
-using System.Text;
 
 namespace Saraff.IoC {
 
-    public interface IConfiguration {
-
-        Type BindServiceAttributeType {
-            get;
-        }
-
-        BindServiceCallback BindServiceCallback {
-            get;
-        }
-
-        Type ServiceRequiredAttributeType {
-            get;
-        }
-
-        Type ContextBinderType {
-            get;
-        }
-
-        Type ProxyRequiredAttributeType {
-            get;
-        }
-
-        Type ListenerType {
-            get;
-        }
-
-        InvokingCallback InvokingCallback {
-            get;
-        }
-
-        InvokedCallback InvokedCallback {
-            get;
-        }
-
-        CatchCallback CatchCallback {
-            get;
-        }
-
-        Type LazyCallbackType {
-            get;
-        }
+    /// <summary>
+    /// Агрегат-маркер конфигурации. Собственных членов не содержит:
+    /// настройки сгруппированы по функциональным интерфейсам.
+    /// </summary>
+    public interface IConfiguration :
+        IContainerBindingConfiguration,
+        IContainerInjectionConfiguration,
+        IContainerInterceptionConfiguration {
     }
 
     public delegate void BindServiceCallback(Attribute attribute,BindServiceCallbackCore callback);
 
     public delegate void BindServiceCallbackCore(Type service,Type objectType);
 
-    public delegate object InvokingCallback(object listener, MethodBase method, object instance, object[] parameters);
+    public delegate InvocationResult InvokingCallback(object listener, MethodBase method, object instance, object[] parameters);
 
-    public delegate object InvokedCallback(object listener, MethodBase method, object instance, object result);
+    public delegate InvocationResult InvokedCallback(object listener, MethodBase method, object instance, object result);
 
-    public delegate Exception CatchCallback(object listener, MethodBase method, object instance, Exception ex);
+    public delegate InvocationResult CatchCallback(object listener, MethodBase method, object instance, Exception ex);
 
     public delegate T Lazy<T>() where T : class;
 }
